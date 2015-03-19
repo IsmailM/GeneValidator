@@ -8,10 +8,10 @@ module GeneValidator
     class << self
       def validate_args(opt)
         @opt = opt
+        assert_output_dir_does_not_exist
         assert_file_present('input file', opt[:input_fasta_file])
         assert_input_file_probably_fasta
         assert_input_contains_single_type_sequence
-        assert_output_dir_does_not_exist
         assert_BLAST_output_files
 
         assert_validations_arg
