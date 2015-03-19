@@ -67,21 +67,24 @@ module GeneValidator
     # +start_idx+: number of the sequence from the file to start with
     # +overall_evaluation+: boolean variable for printing overall evaluation
     # +multithreading+: boolean variable for enabling multithreading
-    def initialize(opt, start_idx = 1, overall_evaluation = true, multithreading = true)
+    def initialize(opt, start_idx = 1, overall_evaluation = true)
       # Validate opts
       @opt = GVArgValidation.validate_args(opt)
       
       puts "\nDepending on your input and your computational resources, this"\
-       ' may take a while. Please wait...'
+           ' may take a while. Please wait...'
 
       @idx                    = 0
       @start_idx              = start_idx
 
-      @multithreading         = multithreading
       @overall_evaluation     = overall_evaluation
 
-      # start a worker thread
-      @threads                = [] # used for parallelizing the validations.
+      # Multi-threading
+      if @opt[:blast_xml_file] || @opt[:blast_tabular_file] || @opt[:fast]
+        @multithreading         = true
+        @threads                = [] # used for parallelizing the validations.
+        @queue                  = Queue.new
+      end
       @mutex                  = Mutex.new
       @mutex_yaml             = Mutex.new
       @mutex_html             = Mutex.new
@@ -98,8 +101,8 @@ module GeneValidator
       @map_errors             = Hash.new(0)
       @map_running_times      = Hash.new(Pair1.new(0, 0))
 
-      @type                   = BlastUtils.guess_sequence_type_from_file(@opt[:input_fasta_file])
-      @query_offset_lst       = create_an_offset_index_of_input_file(@opt[:input_fasta_file])      
+      @type                   = determine_sequence_type
+      @query_offset_lst       = index_the_input(@opt[:input_fasta_file])      
 
       # build the path of html folder output
       dir                     = File.dirname(@opt[:input_fasta_file])
@@ -111,11 +114,6 @@ module GeneValidator
 
       # create 'html' directory
       Dir.mkdir(@html_path)
-
-      # copy auxiliar folders to the html folder
-      aux = File.join(File.dirname(File.expand_path(__FILE__)), '../aux/files')
-      FileUtils.cp_r(aux, @html_path)
-
     end
 
     ##
@@ -135,7 +133,7 @@ module GeneValidator
         iterator = parse_blast_output_file
         run_validations(iterator)
       end
-
+      run_multithreaded_validations if @multithreading == true
       if @overall_evaluation
         Output.print_footer(@no_queries, @scores, @good_predictions,
                             @bad_predictions, @nee, @no_mafft, @no_internet,
@@ -144,9 +142,14 @@ module GeneValidator
       end
     end
 
+    def determine_sequence_type
+      BlastUtils.guess_sequence_type_from_file(@opt[:input_fasta_file])
+    end
+
     ##
     # Runs BLAST on the input file - only run when the opt[:fast] is true
     def run_blast_on_the_input_file
+      return if @opt[:blast_xml_file] || @opt[:blast_tabular_file]
       puts 'Running BLAST'
       @opt[:blast_xml_file] = @opt[:input_fasta_file] + '.blast_xml'
       BlastUtils.run_blast_on_file(@opt)
@@ -163,7 +166,7 @@ module GeneValidator
     # create a list of index of the queries in the FASTA
     # These offset can then be used to quickly read the input file using the 
     # start and end positions of each query.
-    def create_an_offset_index_of_input_file(input_file)
+    def index_the_input(input_file)
       fasta_content = IO.binread(input_file)
       offset_array  = fasta_content.enum_for(:scan, /(>[^>]+)/).map { Regexp.last_match.begin(0) }
       offset_array.push(fasta_content.length)
@@ -248,18 +251,32 @@ module GeneValidator
           @idx -= 1
           break
         end
-
-        # the first validation should be treated separately
+        # the first validation should be treated separately (so that HTML header is printed...)
         if @idx == @start_idx || @multithreading == false
           validate(prediction, hits, idx)
         else
-          @threads << Thread.new(prediction, hits, @idx) do |prediction, hits, idx|
-            validate(prediction, hits, idx)
+          work_unit = {prediction: prediction, hits: hits, idx: idx}
+          @queue << work_unit
+        end
+      end
+    end
+
+    def run_multithreaded_validations
+      @opt[:num_threads].times do
+        @threads << Thread.new do
+          # loop until there are no more things to do
+          until @queue.empty?
+            # pops @queue with the non-blocking flag set, this raises an exception
+            # if the queue is empty, in which case work_unit will be set to nil
+            work_unit = @queue.pop(true) rescue nil
+            if work_unit
+              validate(work_unit[:prediction], work_unit[:hits], work_unit[:idx])
+            end
           end
         end
-
+        # when there is no more work, the thread will stop
       end
-      @threads.each(&:join) unless @multithreading == false
+      @threads.each(&:join)
     end
 
     ##

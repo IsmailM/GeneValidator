@@ -115,6 +115,9 @@ module GeneValidator
 
       # if it's the first time I write in the html file
       if @idx == @start_idx
+        # copy auxiliar folders to the html folder
+        FileUtils.cp_r(File.join(aux_dir, 'files'), @html_path)    
+
         @mutex_html.synchronize do
           template_header     = File.join(aux_dir, 'template_header.erb')
           template_file       = File.open(template_header, 'r').read
