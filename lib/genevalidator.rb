@@ -244,7 +244,7 @@ module GeneValidator
           iterator.next
         else
           hits = iterator.parse_next(prediction.identifier) if @opt[:blast_tabular_file]
-          hits = BlastUtils.parse_next_query_xml(iterator, @type) unless @opt[:blast_tabular_file]
+          hits = BlastUtils.parse_next_query_xml(iterator, @type) if @opt[:blast_xml_file]
         end
 
         if hits.nil?
