@@ -11,14 +11,18 @@ module GeneValidator
     attr_reader :unimodality
     attr_reader :result
 
+    # These thresholds are emperically chosen.
+    UPPER_THRESHOLD = 1.2 # radians
+    LOWER_THRESHOLD = 0.4 # radians
+
     def initialize(short_header, header, description, slope, unimodality,
-                   threshold_down = 0.4, threshold_up = 1.2, expected = :no)
+                   expected = :no)
       @short_header, @header, @description = short_header, header, description
       @slope          = slope.round(1)
       @slope          = @slope.abs if @slope == -0.0
       @unimodality    = unimodality
-      @threshold_down = threshold_down
-      @threshold_up   = threshold_up
+      @threshold_down = LOWER_THRESHOLD
+      @threshold_up   = UPPER_THRESHOLD
       @result         = validation
       @expected       = expected
       @plot_files     = []
