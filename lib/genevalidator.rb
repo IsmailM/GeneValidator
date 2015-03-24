@@ -34,8 +34,6 @@ module GeneValidator
     attr_reader :start_idx
     # array of indexes for the start offsets of each query in the fasta file
     attr_reader :query_offset_lst
-    # list with all validation reports
-    attr_reader :all_query_outputs
 
     attr_reader :overall_evaluation
     attr_reader :multithreading
@@ -66,7 +64,6 @@ module GeneValidator
     # db: 'remote', raw_sequences: nil, num_threads: 1 fast: false}
     # +start_idx+: number of the sequence from the file to start with
     # +overall_evaluation+: boolean variable for printing overall evaluation
-    # +multithreading+: boolean variable for enabling multithreading
     def initialize(opt, start_idx = 1, overall_evaluation = true)
       # Validate opts
       @opt = GVArgValidation.validate_args(opt)
@@ -79,8 +76,7 @@ module GeneValidator
 
       @overall_evaluation     = overall_evaluation
 
-      # Multi-threading
-      if @opt[:blast_xml_file] || @opt[:blast_tabular_file] || @opt[:fast]
+      if @opt[:num_threads] > 1
         @multithreading         = true
         @threads                = [] # used for parallelizing the validations.
         @queue                  = Queue.new
@@ -102,14 +98,13 @@ module GeneValidator
       @map_running_times      = Hash.new(Pair1.new(0, 0))
 
       @type                   = determine_sequence_type
-      @query_offset_lst       = index_the_input(@opt[:input_fasta_file])      
+      @query_offset_lst       = index_the_input      
 
       # build the path of html folder output
       dir                     = File.dirname(@opt[:input_fasta_file])
-      @html_path              = "#{opt[:input_fasta_file]}.html"
-      @yaml_path              = dir
       @filename               = File.basename(@opt[:input_fasta_file])
-      @all_query_outputs      = []
+      @yaml_path              = dir
+      @html_path              = "#{opt[:input_fasta_file]}.html"
       @plot_dir               = "#{@html_path}/files/json"
 
       # create 'html' directory
@@ -166,16 +161,19 @@ module GeneValidator
     # create a list of index of the queries in the FASTA
     # These offset can then be used to quickly read the input file using the 
     # start and end positions of each query.
-    def index_the_input(input_file)
-      fasta_content = IO.binread(input_file)
+    def index_the_input
+      fasta_content = IO.binread(@opt[:input_fasta_file])
       offset_array  = fasta_content.enum_for(:scan, /(>[^>]+)/).map { Regexp.last_match.begin(0) }
       offset_array.push(fasta_content.length)
+      fasta_content = nil
+      offset_array
     end
 
     ##
     # Index the raw sequences file...
     def create_an_index_file_of_raw_seq_file(raw_sequence_file)
       # leave only the identifiers in the fasta description
+      ##### TODO = > do I need to Close the file
       content = File.open(raw_sequence_file, 'rb').read.gsub(/ .*/, '')
       File.open(raw_sequence_file, 'w+') { |f| f.write(content) }
 
@@ -198,6 +196,7 @@ module GeneValidator
       File.open(@raw_seq_file_index, 'w') do |f|
         YAML.dump(index_hash, f)
       end
+      content = nil
     end
 
     ##
@@ -252,7 +251,7 @@ module GeneValidator
           break
         end
         # the first validation should be treated separately (so that HTML header is printed...)
-        if @idx == @start_idx || @multithreading == false
+        if @idx == @start_idx || @multithreading != true
           validate(prediction, hits, idx)
         else
           work_unit = {prediction: prediction, hits: hits, idx: idx}
@@ -301,8 +300,8 @@ module GeneValidator
     # +prediction+: Sequence object
     # +hits+: Array of +Sequence+ objects
     # +idx+: the index number of the query
-    def validate(prediction, hits, idx)
-      query_output = do_validations(prediction, hits, idx)
+    def validate(prediction, hits, current_idx)
+      query_output = do_validations(prediction, hits, current_idx)
       query_output.generate_html
       query_output.print_output_file_yaml
       query_output.print_output_console
@@ -386,7 +385,7 @@ module GeneValidator
     # +idx+: the index number of the query
     # Output:
     # +Output+ object
-    def do_validations(prediction, hits, idx)
+    def do_validations(prediction, hits, current_idx)
       begin
         hits = remove_identical_hits(prediction, hits)
         rescue Exception => error # NoPIdentError
@@ -394,12 +393,12 @@ module GeneValidator
 
       query_output                = Output.new(@mutex, @mutex_yaml, @mutex_html,
                                                @filename, @html_path,
-                                               @yaml_path, idx, @start_idx)
+                                               @yaml_path, current_idx, @start_idx)
       query_output.prediction_len = prediction.length_protein
       query_output.prediction_def = prediction.definition
       query_output.nr_hits        = hits.length
 
-      plot_path                   = File.join(@plot_dir, "#{@filename}_#{@idx}")
+      plot_path                   = File.join(@plot_dir, "#{@filename}_#{current_idx}")
 
       validations = []
       validations.push LengthClusterValidation.new(@type, prediction, hits, plot_path)
