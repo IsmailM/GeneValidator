@@ -87,7 +87,6 @@ module GeneValidator
         return @validation_report
       end
 
-      fail NotEnoughHitsError unless hits.length >= 5
       fail Exception unless prediction.is_a?(Sequence) &&
                             hits[0].is_a?(Sequence)
 
@@ -108,11 +107,6 @@ module GeneValidator
       @validation_report.plot_files.push(plot1)
       @validation_report
 
-    rescue NotEnoughHitsError
-      @validation_report = ValidationReport.new('Not enough evidence', :warning,
-                                                @short_header, @header,
-                                                @description, @approach,
-                                                @explanation, @conclusion)
     rescue Exception
       @validation_report = ValidationReport.new('Unexpected error', :error,
                                                 @short_header, @header,
