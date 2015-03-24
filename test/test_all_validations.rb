@@ -32,7 +32,7 @@ module GeneValidator
     tab_options            = "qseqid sseqid sacc slen qstart qend sstart send length qframe pident evalue"
 
     database               = 'swissprot -remote'
-    threads                = '8'
+    threads                = '1'
 
     # Unwanted Output Files 
     prot_xml_out           = "#{prot_blast_xml_file}.out"
@@ -82,7 +82,7 @@ module GeneValidator
         }
 
         (GeneValidator::Validation.new(opts1, 1, false)).run
-        $stdout.reopen original_stdout
+        # # $stdout.reopen original_stdout
 
         diff = FileUtils.compare_file(prot_xml_out, prot_tab_out)
 
