@@ -60,16 +60,16 @@ BANNER
 
   opt[:num_threads] = 1
   opts.on('-n', '--num_threads num_of_threads',
-          'Specify the number of processor threads to use when running',
-          'BLAST and Mafft within GeneValidator.') do |num_threads|
+          'Specify the number of processor threads that GeneValidator',
+          'should use. Used to parallelise GeneValidator validations,',
+          'BLAST and MAFFT.') do |num_threads|
     opt[:num_threads] = num_threads
   end
 
   opt[:fast] = false
   opts.on('-f', '--fast',
           'Run BLAST on all sequences together (rather than separately)',
-          'to speed up the analysis. Moreover, if more than one thread is',
-          'provided, GV will parrallelise the validations.',
+          'to speed up the analysis.',
           'However, this means that there will be a longer wait before the',
           'results can be viewed (as GeneValidator will need to run BLAST',
           'on all sequences before producing any results).',
