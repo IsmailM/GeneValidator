@@ -36,7 +36,7 @@ module GeneValidator
       def check_num_threads
         @opt[:num_threads] = Integer(@opt[:num_threads])
         unless @opt[:num_threads] > 0
-          puts "Number of threads can not be lower than 0" 
+          puts 'Number of threads can not be lower than 0'
         end
         if @opt[:num_threads] > 256
           puts "Number of threads set at #{@opt[:num_threads]} is unusually high."

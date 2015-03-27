@@ -11,7 +11,7 @@ require 'yaml'
 require 'bio'
 
 module GeneValidator
-  # Contains methods that run BLAST and methods that analyse sequences
+  # Methods that run BLAST and methods that analyse sequences
   class BlastUtils
     class << self
       EVALUE = 1e-5
@@ -28,8 +28,8 @@ module GeneValidator
       # +nr_hits+: max number of hits
       # Output:
       # String with the blast xml output
-      def call_blast_from_stdin(blast_type, query, db, num_threads,
-                                gapopen = 11, gapextend = 1, nr_hits = 200)
+      def run_blast(blast_type, query, db, num_threads, gapopen = 11,
+                    gapextend = 1, nr_hits = 200)
         # -num_threads is not supported on remote databases
         threads = (db !~ /remote/) ? "-num_threads #{num_threads}" : ''
 
@@ -61,8 +61,8 @@ module GeneValidator
                    " -out '#{opt[:blast_xml_file]}' -db #{opt[:db]} " \
                    " -evalue #{EVALUE} -outfmt 5 -max_target_seqs #{nr_hits}" \
                    " -gapopen #{gapopen} -gapextend #{gapextend} #{threads}"
-
-        return `#{blastcmd}` unless File.zero?(opt[:blast_xml_file])
+        `#{blastcmd}`
+        return unless File.zero?(opt[:blast_xml_file])
         puts 'Blast failed to run on the input file. Please ensure that the'
         puts 'BLAST database exists and try again'
         exit 1
@@ -75,7 +75,7 @@ module GeneValidator
       # +type+: the type of the sequence: :nucleotide or :protein
       # Outputs:
       # Array of +Sequence+ objects corresponding to the list of hits
-      def parse_next_query_xml(iterator, type)
+      def parse_next(iterator, type)
         fail TypeError unless iterator.is_a? Enumerator
 
         hits = []
@@ -83,8 +83,7 @@ module GeneValidator
 
         # parse blast the xml output and get the hits
         # hits obtained are proteins! (we use only blastp and blastx)
-        iter.each do | hit |
-
+        iter.each do |hit|
           seq = Sequence.new
 
           seq.length_protein = hit.len.to_i

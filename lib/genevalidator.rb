@@ -18,9 +18,11 @@ require 'io/console'
 require 'yaml'
 require 'thread'
 
+# Top level module / namespace.
 module GeneValidator
   Pair1 = Struct.new(:x, :y)
 
+  # Main Class that initalises and then runs validations.
   class Validation
     attr_reader :opt
     attr_reader :type
@@ -58,16 +60,15 @@ module GeneValidator
     ##
     # Initilizes the object
     # Params:
-    # +input_fasta_file+: fasta file with query sequences
-    # +opt+: A hash - Default Values: {validations: ['all'], 
+    # +opt+: A hash - Default Values: {validations: ['all'],
     # blast_tabular_file: nil, blast_tabular_options: nil, blast_xml_file: nil,
     # db: 'remote', raw_sequences: nil, num_threads: 1 fast: false}
     # +start_idx+: number of the sequence from the file to start with
     # +overall_evaluation+: boolean variable for printing overall evaluation
     def initialize(opt, start_idx = 1, overall_evaluation = true)
-      # Validate opts
+      # Validate opts
       @opt = GVArgValidation.validate_args(opt)
-      
+
       puts "\nDepending on your input and your computational resources, this"\
            ' may take a while. Please wait...'
 
@@ -76,11 +77,8 @@ module GeneValidator
 
       @overall_evaluation     = overall_evaluation
 
-      if @opt[:num_threads] > 1
-        @multithreading         = true
-        @threads                = [] # used for parallelizing the validations.
-        @queue                  = Queue.new
-      end
+      @threads                = [] # used for parallelizing the validations.
+      @queue                  = Queue.new
       @mutex                  = Mutex.new
       @mutex_yaml             = Mutex.new
       @mutex_html             = Mutex.new
@@ -98,7 +96,7 @@ module GeneValidator
       @map_running_times      = Hash.new(Pair1.new(0, 0))
 
       @type                   = determine_sequence_type
-      @query_offset_lst       = index_the_input      
+      @query_offset_lst       = index_the_input
 
       # build the path of html folder output
       dir                     = File.dirname(@opt[:input_fasta_file])
@@ -121,20 +119,19 @@ module GeneValidator
         # run BLAST on each sequence individually & then run validations
         run_blast_on_each_sequence
       else
-        # Extract raw sequences of hits
+        # Extract raw sequences of hits
         extract_raw_sequences_of_blast_hits unless @opt[:raw_sequences]
         create_an_index_file_of_raw_seq_file(@opt[:raw_sequences])
-        # Run Validations  
+        # Run Validations
         iterator = parse_blast_output_file
         run_validations(iterator)
       end
-      run_multithreaded_validations if @multithreading == true
-      if @overall_evaluation
-        Output.print_footer(@no_queries, @scores, @good_predictions,
-                            @bad_predictions, @nee, @no_mafft, @no_internet,
-                            @map_errors, @map_running_times, @html_path,
-                            @filename)
-      end
+      run_multithreaded_validations if @opt[:num_threads] != 1
+      return unless @overall_evaluation
+      Output.print_footer(@no_queries, @scores, @good_predictions,
+                          @bad_predictions, @nee, @no_mafft, @no_internet,
+                          @map_errors, @map_running_times, @html_path,
+                          @filename)
     end
 
     def determine_sequence_type
@@ -153,19 +150,19 @@ module GeneValidator
     ##
     # Extracts raw sequences of all blast hits
     def extract_raw_sequences_of_blast_hits
-        puts 'Extracting sequences within the BLAST output file from the BLAST database'
-        @opt[:raw_sequences] = GetRawSequences.run(@opt)
+      puts 'Extracting sequences within the BLAST output file from the BLAST' \
+           ' database'
+      @opt[:raw_sequences] = GetRawSequences.run(@opt)
     end
 
     ##
     # create a list of index of the queries in the FASTA
-    # These offset can then be used to quickly read the input file using the 
+    # These offset can then be used to quickly read the input file using the
     # start and end positions of each query.
     def index_the_input
       fasta_content = IO.binread(@opt[:input_fasta_file])
       offset_array  = fasta_content.enum_for(:scan, /(>[^>]+)/).map { Regexp.last_match.begin(0) }
       offset_array.push(fasta_content.length)
-      fasta_content = nil
       offset_array
     end
 
@@ -208,7 +205,8 @@ module GeneValidator
       if @opt[:blast_xml_file]
         Bio::BlastXMLParser::XmlIterator.new(@opt[:blast_xml_file]).to_enum
       else
-        TabularParser.new(@opt[:blast_tabular_file], @opt[:blast_tabular_options], @type)
+        TabularParser.new(@opt[:blast_tabular_file], 
+                          @opt[:blast_tabular_options], @type)
       end
       ## TODO: Add a Rescue statement - e.g. if unable to create the Object...
     end
@@ -219,11 +217,14 @@ module GeneValidator
       # file seek for each query
       @query_offset_lst[0..@query_offset_lst.length - 2].each_with_index do |_pos, i|
         if (i + 1) >= @start_idx
-          query = IO.binread(@opt[:input_fasta_file], @query_offset_lst[i + 1] - @query_offset_lst[i], @query_offset_lst[i])
+          start_offset = @query_offset_lst[i + 1] - @query_offset_lst[i]
+          end_offset   = @query_offset_lst[i]
+          query = IO.binread(@opt[:input_fasta_file], start_offset, end_offset)
 
           # call blast with the default parameters
           blast_type = (type == :protein) ? 'blastp' : 'blastx'
-          blast_xml_output = BlastUtils.call_blast_from_stdin(blast_type, query, @opt[:db], @opt[:num_threads])
+          blast_xml_output = BlastUtils.run_blast(blast_type, query, @opt[:db],
+                                                  @opt[:num_threads])
           iterator = Bio::BlastXMLParser::NokogiriBlastXml.new(blast_xml_output).to_enum
           run_validations(iterator)
         else
@@ -239,24 +240,29 @@ module GeneValidator
         prediction = get_info_on_each_query_sequence
         @idx += 1
 
-        if @idx < @start_idx
-          iterator.next
-        else
-          hits = iterator.parse_next(prediction.identifier) if @opt[:blast_tabular_file]
-          hits = BlastUtils.parse_next_query_xml(iterator, @type) if @opt[:blast_xml_file]
-        end
+        hits = parse_next_iteration(iterator)
 
         if hits.nil?
           @idx -= 1
           break
         end
-        # the first validation should be treated separately (so that HTML header is printed...)
-        if @idx == @start_idx || @multithreading != true
+        # the first validation should be treated separately (so that HTML header
+        # is printed...)
+        if @idx == @start_idx || @opt[:num_threads] == 1
           validate(prediction, hits, idx)
         else
-          work_unit = {prediction: prediction, hits: hits, idx: idx}
+          work_unit = { prediction: prediction, hits: hits, idx: idx }
           @queue << work_unit
         end
+      end
+    end
+
+    def parse_next_iteration(iterator)
+      iterator.next if @idx < @start_idx
+      if @opt[:blast_xml_file]
+        BlastUtils.parse_next(iterator, @type)
+      elsif @opt[:blast_tabular_file]
+        iterator.parse_next(prediction.identifier)
       end
     end
 
@@ -265,7 +271,7 @@ module GeneValidator
         @threads << Thread.new do
           # loop until there are no more things to do
           until @queue.empty?
-            # pops @queue with the non-blocking flag set, this raises an exception
+            # pops @queue with the non-blocking flag set - raises an exception
             # if the queue is empty, in which case work_unit will be set to nil
             work_unit = @queue.pop(true) rescue nil
             if work_unit
@@ -281,9 +287,11 @@ module GeneValidator
     ##
     # get info about the query
     def get_info_on_each_query_sequence
-      prediction  = Sequence.new
-      query       = IO.binread(@opt[:input_fasta_file], @query_offset_lst[idx + 1] - @query_offset_lst[idx], @query_offset_lst[idx])
-      parse_query = query.scan(/>([^\n]*)\n([A-Za-z\n]*)/)[0]
+      prediction   = Sequence.new
+      start_offset = @query_offset_lst[idx + 1] - @query_offset_lst[idx]
+      end_offset   = @query_offset_lst[idx]
+      query        = IO.binread(@opt[:input_fasta_file], start_offset, end_offset)
+      parse_query  = query.scan(/>([^\n]*)\n([A-Za-z\n]*)/)[0]
 
       prediction.definition     = parse_query[0].gsub("\n", '')
       prediction.identifier     = prediction.definition.gsub(/ .*/, '')
@@ -454,7 +462,7 @@ module GeneValidator
       validations = query_output.validations
       successes = validations.map { |v| v.result == v.expected }.count(true)
 
-      fails = validations.map { |v| v.validation != :unapplicable && v.validation != :error && 
+      fails = validations.map { |v| v.validation != :unapplicable && v.validation != :error &&
                                     v.result != v.expected }.count(true)
 
       lcv = validations.select { |v| v.class == LengthClusterValidationOutput }

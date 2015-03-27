@@ -182,7 +182,7 @@ module GeneValidator
       f.write((results).to_json)
       f.close
 
-      Plot.new(output.scan(/\/([^\/]+)$/)[0][0],
+      Plot.new(output.scan(%r(/([^/]+)$))[0][0],
                :lines,
                'Open Reading Frames in all 6 Frames',
                'Open Reading Frame (Minimimum Length: 30 amino acids),red',
