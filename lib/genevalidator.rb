@@ -126,7 +126,7 @@ module GeneValidator
         iterator = parse_blast_output_file
         run_validations(iterator)
       end
-      run_multithreaded_validations if @opt[:num_threads] != 1
+      run_multithreaded_validations if @opt[:num_threads] > 1
       return unless @overall_evaluation
       Output.print_footer(@no_queries, @scores, @good_predictions,
                           @bad_predictions, @nee, @no_mafft, @no_internet,
@@ -205,7 +205,7 @@ module GeneValidator
       if @opt[:blast_xml_file]
         Bio::BlastXMLParser::XmlIterator.new(@opt[:blast_xml_file]).to_enum
       else
-        TabularParser.new(@opt[:blast_tabular_file], 
+        TabularParser.new(@opt[:blast_tabular_file],
                           @opt[:blast_tabular_options], @type)
       end
       ## TODO: Add a Rescue statement - e.g. if unable to create the Object...
