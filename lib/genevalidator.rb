@@ -107,6 +107,9 @@ module GeneValidator
 
       # create 'html' directory
       Dir.mkdir(@html_path)
+      # copy auxiliar folders to the html folder
+      aux = File.join(File.dirname(File.expand_path(__FILE__)), '../aux/files')
+      FileUtils.cp_r(aux, @html_path)
     end
 
     ##
