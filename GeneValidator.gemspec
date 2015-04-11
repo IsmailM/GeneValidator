@@ -5,11 +5,11 @@ require 'genevalidator/version'
 
 Gem::Specification.new do |s|
   # meta
-  s.name        = 'GeneValidator'
+  s.name        = 'genevalidator'
   s.date        = '2013-07-22'
   s.version     =  GeneValidator::VERSION
   s.authors     = ['Monica Dragan', 'Ismail Moghul', 'Anurag Priyam', 'Yannick Wurm']
-  s.email       = 'monica.dragan@cti.pub.ro'
+  s.email       = 'y.wurm@qmul.ac.uk'
   s.homepage    = 'https://github.com/monicadragan/GeneValidator'
   s.license     = 'GPL'
   s.summary     = 'Identifying problems with gene predictions.'

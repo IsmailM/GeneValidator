@@ -52,12 +52,11 @@ module GeneValidator
     end
 
     def validation
-      unless @limits.nil?
-        if @query_length >= @limits[0] && @query_length <= @limits[1]
-          :yes
-        else
-          :no
-        end
+      return if @limits.nil?
+      if @query_length >= @limits[0] && @query_length <= @limits[1]
+        :yes
+      else
+        :no
       end
     end
   end
@@ -166,7 +165,7 @@ module GeneValidator
       [clusters, max_density_cluster_idx]
 
     rescue TypeError => error
-      error_location = error.backtrace[0].scan(%r(/([^/]+:\d+):.*))[0][0]
+      error_location = error.backtrace[0].scan(%r{([^/]+:\d+):.*})[0][0]
       $stderr.puts "Type error at #{error_location}."
       $stderr.puts ' Possible cause: one of the arguments of the' \
                    ' "clusterization_by_length" method has not the proper type.'
@@ -194,7 +193,7 @@ module GeneValidator
         }
       }.to_json)
       f.close
-      Plot.new(output.scan(%r(/([^/]+)$))[0][0],
+      Plot.new(output.scan(%r{([^/]+)$})[0][0],
                :bars,
                'Length Cluster Validation: Distribution of BLAST hit lengths',
                'Query Sequence, black;Most Dense Cluster,red;Other Hits, blue',
@@ -230,7 +229,8 @@ module GeneValidator
       }.flatten).to_json)
 
       f.close
-      Plot.new(output.scan(%r(/([^/]+)$))[0][0],
+
+      Plot.new(output.scan(%r{([^/]+)$})[0][0],
                :lines,
                '[Length Cluster] Matched regions in hits',
                'hit, gray;high-scoring segment pairs (hsp), red',

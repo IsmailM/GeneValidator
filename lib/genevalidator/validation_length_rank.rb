@@ -96,7 +96,7 @@ module GeneValidator
 
     ##
     # Calculates a percentage based on the rank of the prediction among the
-    # hit lengths
+    # hit lengths
     # Params:
     # +hits+ (optional): a vector of +Sequence+ objects
     # +prediction+ (optional): a +Sequence+ object

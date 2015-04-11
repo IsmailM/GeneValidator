@@ -166,6 +166,7 @@ module GeneValidator
       fasta_content = IO.binread(@opt[:input_fasta_file])
       offset_array  = fasta_content.enum_for(:scan, /(>[^>]+)/).map { Regexp.last_match.begin(0) }
       offset_array.push(fasta_content.length)
+      fasta_content = nil
       offset_array
     end
 
@@ -239,12 +240,14 @@ module GeneValidator
     ##
     #
     def run_validations(iterator)
+      if @opt[:num_threads] > 1
+        puts 'Analysing BLAST Output...'
+        puts 'This may take some time on large datasets.'
+      end
       while @idx + 1 < @query_offset_lst.length
         prediction = get_info_on_each_query_sequence
         @idx += 1
-
-        hits = parse_next_iteration(iterator)
-
+        hits = parse_next_iteration(iterator, prediction)
         if hits.nil?
           @idx -= 1
           break
@@ -260,7 +263,7 @@ module GeneValidator
       end
     end
 
-    def parse_next_iteration(iterator)
+    def parse_next_iteration(iterator, prediction)
       iterator.next if @idx < @start_idx
       if @opt[:blast_xml_file]
         BlastUtils.parse_next(iterator, @type)
@@ -412,13 +415,24 @@ module GeneValidator
       plot_path                   = File.join(@plot_dir, "#{@filename}_#{current_idx}")
 
       validations = []
-      validations.push LengthClusterValidation.new(@type, prediction, hits, plot_path)
+      validations.push LengthClusterValidation.new(@type, prediction, hits,
+                                                   plot_path)
       validations.push LengthRankValidation.new(@type, prediction, hits)
-      validations.push GeneMergeValidation.new(@type, prediction, hits, plot_path)
-      validations.push DuplicationValidation.new(@type, prediction, hits, @opt[:raw_sequences], @raw_seq_file_index, @raw_seq_file_load, @opt[:db], @opt[:num_threads])
+      validations.push GeneMergeValidation.new(@type, prediction, hits,
+                                               plot_path)
+      validations.push DuplicationValidation.new(@type, prediction, hits,
+                                                 @opt[:raw_sequences],
+                                                 @raw_seq_file_index,
+                                                 @raw_seq_file_load, @opt[:db],
+                                                 @opt[:num_threads])
       validations.push BlastReadingFrameValidation.new(@type, prediction, hits)
-      validations.push OpenReadingFrameValidation.new(@type, prediction, hits, plot_path)
-      validations.push AlignmentValidation.new(@type, prediction, hits, plot_path, @opt[:raw_sequences], @raw_seq_file_index, @raw_seq_file_load, @opt[:db], @opt[:num_threads])
+      validations.push OpenReadingFrameValidation.new(@type, prediction, hits,
+                                                      plot_path)
+      validations.push AlignmentValidation.new(@type, prediction, hits,
+                                               plot_path, @opt[:raw_sequences],
+                                               @raw_seq_file_index,
+                                               @raw_seq_file_load,
+                                               @opt[:db], @opt[:num_threads])
 
       validations = validations.select { |v| @opt[:validations].include? v.cli_name.downcase }
 
@@ -444,20 +458,27 @@ module GeneValidator
       query_output
 
     rescue ValidationClassError => error
-      $stderr.print "Class Type error at #{error.backtrace[0].scan(/\/([^\/]+:\d+):.*/)[0][0]}. "\
-         "Possible cause: type of one of the validations is not ValidationTest\n"
+      error_line = error.backtrace[0].scan(%r{/([^/]+:\d+):.*})[0][0]
+      $stderr.print "Class Type error at #{error_line}." \
+                    ' Possible cause: type of one of the validations is not' \
+                    " ValidationTest\n"
       exit 1
     rescue NoValidationError => error
-      $stderr.print "Validation error at #{error.backtrace[0].scan(/\/([^\/]+:\d+):.*/)[0][0]}. "\
-         "Possible cause: your -v arguments are not valid aliases\n"
+      error_line = error.backtrace[0].scan(%r{/([^/]+:\d+):.*})[0][0]
+      $stderr.print "Validation error at #{error_line}." \
+                    " Possible cause: your -v arguments are not valid aliases\n"
       exit 1
     rescue ReportClassError => error
-      $stderr.print "Class Type error at #{error.backtrace[0].scan(/\/([^\/]+:\d+):.*/)[0][0]}. "\
-        "Possible cause: type of one of the validation reports returned by the 'run' method is not ValidationReport\n"
+      error_line = error.backtrace[0].scan(%r{/([^/]+:\d+):.*})[0][0]
+      $stderr.print "Class Type error at #{error_line}."\
+                    ' Possible cause: type of one of the validation reports' \
+                    " returned by the 'run' method is not ValidationReport\n"
       exit 1
     rescue AliasDuplicationError => error
-      $stderr.print "Alias Duplication error at #{error.backtrace[0].scan(/\/([^\/]+:\d+):.*/)[0][0]}. "\
-        "Possible cause: At least two validations have the same CLI alias\n"
+      error_line = error.backtrace[0].scan(%r{/([^/]+:\d+):.*})[0][0]
+      $stderr.print "Alias Duplication error at #{error_line}."\
+                    ' Possible cause: At least two validations have the same' \
+                    " CLI alias\n"
       exit 1
     end
 
@@ -465,7 +486,8 @@ module GeneValidator
       validations = query_output.validations
       successes = validations.map { |v| v.result == v.expected }.count(true)
 
-      fails = validations.map { |v| v.validation != :unapplicable && v.validation != :error &&
+      fails = validations.map { |v| v.validation != :unapplicable &&
+                                    v.validation != :error &&
                                     v.result != v.expected }.count(true)
 
       lcv = validations.select { |v| v.class == LengthClusterValidationOutput }
@@ -478,16 +500,17 @@ module GeneValidator
           successes -= 1
         elsif score_lcv == false && score_lrv == false
           # if both are false this will be a fail
-          fails     -= 1
+          fails -= 1
         else
           successes -= 0.5
-          fails     -= 0.5
+          fails -= 0.5
         end
       end
 
-      query_output.successes = successes
-      query_output.fails = fails
-      query_output.overall_score = (successes * 100 / (successes + fails + 0.0)).round(0)
+      query_output.successes     = successes
+      query_output.fails         = fails
+      total_query                = successes.to_i + fails
+      query_output.overall_score = (successes * 100 / (total_query)).round(0)
     end
   end
 end

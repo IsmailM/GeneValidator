@@ -1,15 +1,14 @@
-
+# Top level module / namespace.
 module GeneValidator
   Pair = Struct.new(:x, :y) do
-
     include Comparable
 
     ##
     # Overload '-' operator
     # Returns the euclidian distane between two pairs
-    def -(p)
-      xx = p.x
-      yy = p.y
+    def -(other)
+      xx = other.x
+      yy = other.y
       Math.sqrt((x - xx) * (x - xx) + (y - yy) * (y - yy))
     end
 
@@ -20,42 +19,41 @@ module GeneValidator
     ##
     # Overload '+' operator
     # This will modify the current object
-    def +(p)
-      self.x += p.x
-      self.y += p.y
+    def +(other)
+      self.x += other.x
+      self.y += other.y
     end
 
     ##
     # Overload '*' operator
     # This will modify the current object
-    def *(val)
-      self.x *= val
-      self.y *= val
+    def *(other)
+      self.x *= other
+      self.y *= other
     end
 
     ##
     # Overload '/' operator
     # This will modify the current object
-    def /(val)
-      self.x /= (val + 0.0)
-      self.y /= (val + 0.0)
+    def /(other)
+      self.x /= other.to_f
+      self.y /= other.to_f
     end
 
     ##
     # Overload quality operator
     # Returns true if the pairs are equal, false otherwise
-    def ==(p)
-      (p.x == x && p.y == y) ? true : false
+    def ==(other)
+      (other.x == x && other.y == y) ? true : false
     end
 
-    def eql?(p)
-      self == p
+    def eql?(other)
+      self == other
     end
 
     def hash
       [self.x, self.y].hash
     end
-
   end
 
   class PairCluster
