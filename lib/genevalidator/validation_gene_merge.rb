@@ -118,7 +118,6 @@ module GeneValidator
 
       pairs = hits.map { |hit| Pair.new(hit.hsp_list.map{ |hsp| hsp.match_query_from }.min,
                                         hit.hsp_list.map{ |hsp| hsp.match_query_to }.max) }
-
       xx_0 = pairs.map(&:x)
       yy_0 = pairs.map(&:y)
 

@@ -229,7 +229,6 @@ module GeneValidator
       }.flatten).to_json)
 
       f.close
-
       Plot.new(output.scan(%r{([^/]+)$})[0][0],
                :lines,
                '[Length Cluster] Matched regions in hits',

@@ -36,7 +36,6 @@ module GeneValidator
     attr_reader :start_idx
     # array of indexes for the start offsets of each query in the fasta file
     attr_reader :query_offset_lst
-
     attr_reader :overall_evaluation
     attr_reader :multithreading
 

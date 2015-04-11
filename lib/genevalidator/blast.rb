@@ -11,7 +11,7 @@ require 'yaml'
 require 'bio'
 
 module GeneValidator
-  # Methods that run BLAST and methods that analyse sequences
+  # Contains methods that run BLAST and methods that analyse sequences
   class BlastUtils
     class << self
       EVALUE = 1e-5
@@ -55,6 +55,7 @@ module GeneValidator
         blastcmd = "#{blast_type} -query '#{opt[:input_fasta_file]}'" \
                    " -out '#{opt[:blast_xml_file]}' -db #{opt[:db]} " \
                    " -evalue #{EVALUE} -outfmt 5 #{threads}"
+
         `#{blastcmd}`
         return unless File.zero?(opt[:blast_xml_file])
         puts 'Blast failed to run on the input file. Please ensure that the'
